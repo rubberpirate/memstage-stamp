@@ -47,7 +47,22 @@ class _LibraryViewState extends State<LibraryView> {
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle, color: AppTheme.primary),
-            onPressed: () {},
+            onPressed: () {
+              showDialog(context: context, builder: (ctx) => AlertDialog(
+                title: const Text('User Profile'),
+                content: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.account_circle, size: 64, color: AppTheme.primary),
+                    SizedBox(height: 16),
+                    Text('rubberpirate', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))
+                ],
+              ));
+            },
           )
         ],
       ),
@@ -67,7 +82,7 @@ class _LibraryViewState extends State<LibraryView> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       const Text('My Stamps', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'Work Sans', color: AppTheme.onSurface)),
-                      Text('\${_stamps.length} Artifacts', style: const TextStyle(fontSize: 14, color: AppTheme.onSurfaceVariant)),
+                      Text('${_stamps.length} Artifacts', style: const TextStyle(fontSize: 14, color: AppTheme.onSurfaceVariant)),
                     ],
                   ),
                   Container(

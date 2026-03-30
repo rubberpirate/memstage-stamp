@@ -62,10 +62,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   }
 
   void _onPhotoTaken() {
-    setState(() {
-      _currentIndex = 1; // Switch to archive automatically after punching? Or stay on camera. Let's stay on camera, just update list. Actually let's just stay on camera.
-    });
-    // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Memory punched!')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Memory punched!')));
   }
 
   void _onStampSelected(Stamp stamp) {

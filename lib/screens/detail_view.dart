@@ -77,7 +77,7 @@ class DetailView extends StatelessWidget {
             const SizedBox(height: 8),
             Align(
                alignment: Alignment.centerLeft,
-               child: Text('Stamp No. \${stamp!.id.substring(stamp!.id.length - 4)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'Work Sans', color: AppTheme.onSurface)),
+               child: Text('STAMP-${stamp!.id.substring(stamp!.id.length - 4)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: AppTheme.onSurface)),
             ),
             const SizedBox(height: 24),
 
@@ -107,7 +107,21 @@ class DetailView extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        Text(stamp!.locationName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Work Sans')),
+                        Builder(
+                          builder: (context) {
+                            var parts = stamp!.locationName.split('|');
+                            if (parts.length > 1) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(parts[0], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Work Sans')),
+                                  Text(parts[1], style: const TextStyle(fontSize: 12, color: AppTheme.onSurfaceVariant)),
+                                ],
+                              );
+                            }
+                            return Text(stamp!.locationName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Work Sans'));
+                          }
+                        ),
                       ],
                     ),
                   ),

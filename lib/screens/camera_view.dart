@@ -1,13 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
+import 'package:image/image.dart' as img;
+import 'package:flutter/foundation.dart';
 import '../models/stamp.dart';
 import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/stamp_clipper.dart';
+
+Uint8List? cropImageAndEncodeSync(Uint8List imageBytes) {
+  try {
+    img.Image? originalImage = img.decodeImage(imageBytes);
+    if (originalImage != null) {
+      // Calculate central 1:1 crop matching the stamp viewport
+      int size = originalImage.width < originalImage.height ? originalImage.width : originalImage.height;
+      int x = (originalImage.width - size) ~/ 2;
+      int y = (originalImage.height - size) ~/ 2;
+      img.Image cropped = img.copyCrop(originalImage, x: x, y: y, width: size, height: size);
+      img.Image resized = img.copyResize(cropped, width: 800, height: 800);
+      return img.encodeJpg(resized, quality: 85);
+    }
+  } catch (e) {
+    print("Image crop failed: \$e");
+  }
+  return null;
+}
 
 class CameraView extends StatefulWidget {
   final StorageService storageService;
@@ -26,12 +48,13 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
   late AnimationController _punchController;
   late Animation<double> _punchAnimation;
   int _currentCameraIdx = 0;
+  bool _isFlashOn = false;
 
   @override
   void initState() {
     super.initState();
     _initCamera();
-    _punchController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _punchController = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
     _punchAnimation = Tween<double>(begin: 1.0, end: 0.8).animate(
       CurvedAnimation(parent: _punchController, curve: Curves.easeIn, reverseCurve: Curves.easeOut),
     );
@@ -48,9 +71,10 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
     if (_controller != null) {
       await _controller!.dispose();
     }
-    _controller = CameraController(cameraDescription, ResolutionPreset.high);
+    _controller = CameraController(cameraDescription, ResolutionPreset.high, enableAudio: false);
     try {
       await _controller!.initialize();
+      await _controller!.setFlashMode(_isFlashOn ? FlashMode.always : FlashMode.off);
       if (mounted) setState(() => _isReady = true);
     } catch (e) {
       print("Error initializing camera: \$e");
@@ -60,45 +84,84 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
   Future<void> _takePhoto() async {
     if (_controller == null || !_controller!.value.isInitialized || _controller!.value.isTakingPicture) return;
 
-    // Play punch animation
+    // Play fast punch animation
     await _punchController.forward();
 
     try {
       final XFile pic = await _controller!.takePicture();
+      _punchController.reverse(); // Bounce back instantly
       
-      // Get location (using basic coords for now as reverse geocoding requires network or API)
-      Position? position;
-      String locName = "Unknown Location";
+      // We don't await the complex background tasks, ensuring 0 frozen UI.
+      _processAndSavePhoto(pic);
+    } catch (e) {
+      print("Take photo error (could be flash or permission): \$e");
+      _punchController.reverse();
+    }
+  }
+
+  Future<void> _processAndSavePhoto(XFile pic) async {
+    try {
+      // Get optional location safely
+      String mainLocName = "Unknown Location";
+      String subLocName = "";
       try {
-        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low).timeout(const Duration(seconds: 3));
-        locName = "\${position.latitude.toStringAsFixed(2)}, \${position.longitude.toStringAsFixed(2)}";
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+            Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low).timeout(const Duration(seconds: 2));
+            subLocName = "${position.latitude.toStringAsFixed(2)}, ${position.longitude.toStringAsFixed(2)}";
+            
+            // Try reverse geocoding
+            try {
+              List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+              if (placemarks.isNotEmpty) {
+                Placemark place = placemarks[0];
+                mainLocName = "${place.locality ?? place.subLocality ?? 'Unknown Area'}";
+              }
+            } catch (e) {}
+          }
+        }
       } catch (e) {
-        print("Could not get location: \$e");
+        print("Could not get location safely: $e");
       }
 
-      // Save to app directory
+      // Process and save cropped 1:1 image
       final directory = await getApplicationDocumentsDirectory();
       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final String fullPath = '\${directory.path}/stamp_\$timestamp.png';
-      await File(pic.path).copy(fullPath);
+      final String fullPath = '${directory.path}/stamp_$timestamp.jpg';
+
+      Uint8List originalBytes = await pic.readAsBytes();
+      Uint8List? croppedBytes = await compute(cropImageAndEncodeSync, originalBytes);
+
+      if (croppedBytes != null) {
+        await File(fullPath).writeAsBytes(croppedBytes);
+      } else {
+        await File(pic.path).copy(fullPath); // fallback
+      }
 
       final stamp = Stamp(
         id: timestamp,
         filePath: fullPath,
-        locationName: locName,
+        locationName: "$mainLocName|$subLocName", // Packing them into the existing locationName field
         dateTime: DateTime.now(),
       );
 
       await widget.storageService.saveStamp(stamp);
-      _punchController.reverse(); // finish animation
-
       // Notify parent to perhaps switch tab or update library
       widget.onPhotoTaken();
       
     } catch (e) {
       print(e);
-      _punchController.reverse();
     }
+  }
+
+  void _toggleFlash() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    setState(() {
+      _isFlashOn = !_isFlashOn;
+    });
+    await _controller!.setFlashMode(_isFlashOn ? FlashMode.always : FlashMode.off);
   }
 
   void _flipCamera() {
@@ -150,12 +213,14 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
               children: [
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () {}, // Close app if needed
+                  onPressed: () {
+                    SystemNavigator.pop();
+                  }, // Close app if needed
                 ),
                 const Text("Puncher", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Work Sans')),
                 IconButton(
-                  icon: const Icon(Icons.flash_on, color: Colors.white),
-                  onPressed: () {}, // Toggle flash
+                  icon: Icon(_isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.white),
+                  onPressed: _toggleFlash, // Toggle flash
                 )
               ],
             ),
