@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../models/stamp.dart';
 import '../services/storage_service.dart';
 import '../theme.dart';
+import '../widgets/stamp_clipper.dart';
 
 class CameraView extends StatefulWidget {
   final StorageService storageService;
@@ -69,7 +70,7 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
       Position? position;
       String locName = "Unknown Location";
       try {
-        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low);
+        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low).timeout(const Duration(seconds: 3));
         locName = "\${position.latitude.toStringAsFixed(2)}, \${position.longitude.toStringAsFixed(2)}";
       } catch (e) {
         print("Could not get location: \$e");
@@ -131,8 +132,13 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
              ),
           ),
           
-          // Vignette
-          Container(color: Colors.black38),
+          // Vignette / Dimmer with Stamp Hole
+          IgnorePointer(
+            child: ClipPath(
+              clipper: _HoleClipper(),
+              child: Container(color: Colors.black87),
+            ),
+          ),
           
           // Back Button / App Bar
           Positioned(
@@ -155,29 +161,18 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
             ),
           ),
 
-          // Stamp Cutout Overlay
-          Center(
-            child: ScaleTransition(
-              scale: _punchAnimation,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                   Container(
-                     width: 300,
-                     height: 300,
-                     decoration: BoxDecoration(
-                       border: Border.all(color: Colors.white.withOpacity(0.1), width: 16),
-                       boxShadow: [
-                         BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 80)
-                       ]
-                     ),
+          // Stamp Cutout Overlay - physical white border
+          IgnorePointer(
+            child: Center(
+              child: ScaleTransition(
+                scale: _punchAnimation,
+                child: SizedBox(
+                   width: 300,
+                   height: 300,
+                   child: CustomPaint(
+                     painter: _StampBorderPainterLocal(),
                    ),
-                   // Corner accents
-                   Positioned(top: 16, left: 16, child: _buildCorner(top: true, left: true)),
-                   Positioned(top: 16, right: 16, child: _buildCorner(top: true, left: false)),
-                   Positioned(bottom: 16, left: 16, child: _buildCorner(top: false, left: true)),
-                   Positioned(bottom: 16, right: 16, child: _buildCorner(top: false, left: false)),
-                ],
+                ),
               ),
             ),
           ),
@@ -248,17 +243,42 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
   }
 
   Widget _buildCorner({required bool top, required bool left}) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        border: Border(
-           top: top ? const BorderSide(color: Colors.white60, width: 2) : BorderSide.none,
-           bottom: !top ? const BorderSide(color: Colors.white60, width: 2) : BorderSide.none,
-           left: left ? const BorderSide(color: Colors.white60, width: 2) : BorderSide.none,
-           right: !left ? const BorderSide(color: Colors.white60, width: 2) : BorderSide.none,
-        )
-      ),
-    );
+    return Container(); // No longer used, but kept to avoid errors if any refs remain
   }
 }
+
+class _HoleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    Path path = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    
+    double width = 300;
+    double height = 300;
+    Path stampPath = StampClipper(radius: 6, gap: 4).getClip(Size(width, height));
+    stampPath = stampPath.shift(Offset((size.width - width) / 2, (size.height - height) / 2));
+    
+    path.addPath(stampPath, Offset.zero);
+    path.fillType = PathFillType.evenOdd;
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+class _StampBorderPainterLocal extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    Path stampPath = StampClipper(radius: 6, gap: 4).getClip(size);
+    Paint paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawPath(stampPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
