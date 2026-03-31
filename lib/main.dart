@@ -18,7 +18,7 @@ class StampApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Stamp Puncher App',
+      title: 'Memotage',
       theme: AppTheme.lightTheme,
       home: const MainNavigator(),
       debugShowCheckedModeBanner: false,
@@ -62,7 +62,16 @@ class _MainNavigatorState extends State<MainNavigator> {
   }
 
   void _onPhotoTaken() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Memory punched!')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Memory punched!'),
+        duration: const Duration(milliseconds: 1500),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+      ),
+    );
   }
 
   void _onStampSelected(Stamp stamp) {
@@ -120,53 +129,32 @@ class _MainNavigatorState extends State<MainNavigator> {
 
     return Scaffold(
       body: currentBody,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.onSurface.withOpacity(0.04),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
-            )
-          ],
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16))
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              setState(() {
-                _currentIndex = index;
-                if (index != 2) _selectedStamp = null; // Clear detail when navigating away
-              });
-            },
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            selectedItemColor: AppTheme.primary,
-            unselectedItemColor: AppTheme.primary.withOpacity(0.6),
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'Inter'),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11, fontFamily: 'Inter'),
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.camera),
-                activeIcon: Icon(Icons.camera, fill: 1.0),
-                label: 'Puncher'
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.grid_view),
-                activeIcon: Icon(Icons.grid_view, fill: 1.0),
-                label: 'Archive'
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.info_outline),
-                activeIcon: Icon(Icons.info, fill: 1.0),
-                label: 'Details'
-              ),
-            ],
+      bottomNavigationBar: NavigationBar(
+        onDestinationSelected: (int index) {
+          setState(() {
+            _currentIndex = index;
+            if (index != 2) _selectedStamp = null; // Clear detail when navigating away
+          });
+        },
+        selectedIndex: _currentIndex,
+        indicatorColor: AppTheme.surfaceContainerHighest,
+        destinations: <Widget>[
+          NavigationDestination(
+            selectedIcon: Image.asset('assets/logo.png', width: 24, height: 24),
+            icon: Image.asset('assets/logo.png', width: 24, height: 24),
+            label: 'Capture',
           ),
-        ),
+          const NavigationDestination(
+            selectedIcon: Icon(Icons.grid_view),
+            icon: Icon(Icons.grid_view_outlined),
+            label: 'Archive',
+          ),
+          const NavigationDestination(
+            selectedIcon: Icon(Icons.info),
+            icon: Icon(Icons.info_outline),
+            label: 'Details',
+          ),
+        ],
       ),
     );
   }

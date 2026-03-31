@@ -4,12 +4,18 @@ import 'dart:io';
 import '../models/stamp.dart';
 import '../theme.dart';
 import '../widgets/stamp_clipper.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
 
 class DetailView extends StatelessWidget {
   final Stamp? stamp;
   final VoidCallback onBack;
+  final GlobalKey _stampKey = GlobalKey();
 
-  const DetailView({Key? key, this.stamp, required this.onBack}) : super(key: key);
+  DetailView({Key? key, this.stamp, required this.onBack}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +40,35 @@ class DetailView extends StatelessWidget {
           icon: const Icon(Icons.arrow_back, color: AppTheme.primary),
           onPressed: onBack,
         ),
-        title: const Text('Stamp Detail', style: TextStyle(fontFamily: 'Work Sans', fontWeight: FontWeight.bold, color: AppTheme.primary)),
+        title: Row(
+          children: [
+            Image.asset('assets/logo.png', height: 24, width: 24),
+            const SizedBox(width: 8),
+            const Text('Memotage Detail', style: TextStyle(fontFamily: 'Work Sans', fontWeight: FontWeight.bold, color: AppTheme.primary)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share, color: AppTheme.primary),
+            onPressed: () async {
+              try {
+                RenderRepaintBoundary boundary = _stampKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+                ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+                ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+                Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+                final tempDir = await getTemporaryDirectory();
+                final file = await File('${tempDir.path}/shared_memo_${stamp!.id}.png').create();
+                await file.writeAsBytes(pngBytes);
+
+                final String displayId = stamp!.id.contains('-') ? stamp!.id : stamp!.id.substring(stamp!.id.length - 4);
+                await Share.shareXFiles([XFile(file.path)], text: 'Check out my Memotage: MEMO-$displayId');
+              } catch (e) {
+                debugPrint("Error sharing: $e");
+              }
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -43,24 +77,27 @@ class DetailView extends StatelessWidget {
             // Floating Stamp Visualization
             Center(
               child: Hero(
-                tag: 'stamp_\${stamp!.id}',
-                child: Container(
-                  width: 250,
-                  height: 250,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: AppTheme.primary.withOpacity(0.1), blurRadius: 40, spreadRadius: 10),
-                    ]
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: ClipPath(
-                      clipper: StampClipper(radius: 6, gap: 4),
-                      child: Image.file(
-                        File(stamp!.filePath),
-                        fit: BoxFit.cover,
+                tag: 'stamp_${stamp!.id}',
+                child: RepaintBoundary(
+                  key: _stampKey,
+                  child: Container(
+                    width: 250,
+                    height: 250,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(color: AppTheme.primary.withOpacity(0.1), blurRadius: 40, spreadRadius: 10),
+                      ]
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: ClipPath(
+                        clipper: StampClipper(radius: 6, gap: 4),
+                        child: Image.file(
+                          File(stamp!.filePath),
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
@@ -77,7 +114,12 @@ class DetailView extends StatelessWidget {
             const SizedBox(height: 8),
             Align(
                alignment: Alignment.centerLeft,
-               child: Text('STAMP-${stamp!.id.substring(stamp!.id.length - 4)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: AppTheme.onSurface)),
+               child: Builder(
+                 builder: (context) {
+                   final String displayId = stamp!.id.contains('-') ? stamp!.id : stamp!.id.substring(stamp!.id.length - 4);
+                   return Text('MEMO-$displayId', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: AppTheme.onSurface));
+                 }
+               ),
             ),
             const SizedBox(height: 24),
 

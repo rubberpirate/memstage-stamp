@@ -41,7 +41,13 @@ class _LibraryViewState extends State<LibraryView> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('The Curated Archive', style: TextStyle(fontFamily: 'Work Sans', fontWeight: FontWeight.bold, color: AppTheme.primary)),
+        title: Row(
+          children: [
+            Image.asset('assets/logo.png', height: 24, width: 24),
+            const SizedBox(width: 8),
+            const Text('Memotage Library', style: TextStyle(fontFamily: 'Work Sans', fontWeight: FontWeight.bold, color: AppTheme.primary)),
+          ],
+        ),
         backgroundColor: Colors.white.withOpacity(0.8),
         elevation: 0,
         actions: [
@@ -81,7 +87,7 @@ class _LibraryViewState extends State<LibraryView> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('My Stamps', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'Work Sans', color: AppTheme.onSurface)),
+                      const Text('My Memotages', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, fontFamily: 'Work Sans', color: AppTheme.onSurface)),
                       Text('${_stamps.length} Artifacts', style: const TextStyle(fontSize: 14, color: AppTheme.onSurfaceVariant)),
                     ],
                   ),
@@ -97,7 +103,7 @@ class _LibraryViewState extends State<LibraryView> {
 
                   // Grid View
                   _stamps.isEmpty
-                    ? const Center(child: Padding(padding: EdgeInsets.all(40), child: Text("No stamps collected yet. Go punch some memories!", style: TextStyle(color: AppTheme.onSurfaceVariant))))
+                    ? const Center(child: Padding(padding: EdgeInsets.all(40), child: Text("No memotages collected yet. Go capture some memories!", style: TextStyle(color: AppTheme.onSurfaceVariant))))
                     : GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),

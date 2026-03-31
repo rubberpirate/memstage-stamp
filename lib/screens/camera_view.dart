@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:image/image.dart' as img;
@@ -91,6 +92,9 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
       final XFile pic = await _controller!.takePicture();
       _punchController.reverse(); // Bounce back instantly
       
+      // Trigger the snacbkar right away!
+      widget.onPhotoTaken();
+      
       // We don't await the complex background tasks, ensuring 0 frozen UI.
       _processAndSavePhoto(pic);
     } catch (e) {
@@ -108,8 +112,15 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
         if (serviceEnabled) {
           LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
           if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-            Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.low).timeout(const Duration(seconds: 2));
+            Position? position = await Geolocator.getLastKnownPosition();
+            position ??= await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.medium
+            ).timeout(const Duration(seconds: 5));
+            
             subLocName = "${position.latitude.toStringAsFixed(2)}, ${position.longitude.toStringAsFixed(2)}";
             
             // Try reverse geocoding
@@ -117,9 +128,11 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
               List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
               if (placemarks.isNotEmpty) {
                 Placemark place = placemarks[0];
-                mainLocName = "${place.locality ?? place.subLocality ?? 'Unknown Area'}";
+                mainLocName = "${place.locality ?? place.subLocality ?? place.administrativeArea ?? 'Unknown Area'}";
               }
-            } catch (e) {}
+            } catch (e) {
+              debugPrint("Geocoding failed: $e");
+            }
           }
         }
       } catch (e) {
@@ -128,8 +141,10 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
 
       // Process and save cropped 1:1 image
       final directory = await getApplicationDocumentsDirectory();
-      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final String fullPath = '${directory.path}/stamp_$timestamp.jpg';
+      final String rawUuid = const Uuid().v4().replaceAll('-', '').toUpperCase();
+      final String stampCode = "${rawUuid.substring(0, 4)}-${rawUuid.substring(4, 8)}";
+
+      final String fullPath = '${directory.path}/stamp_$stampCode.jpg';
 
       Uint8List originalBytes = await pic.readAsBytes();
       Uint8List? croppedBytes = await compute(cropImageAndEncodeSync, originalBytes);
@@ -141,15 +156,13 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
       }
 
       final stamp = Stamp(
-        id: timestamp,
+        id: stampCode,
         filePath: fullPath,
         locationName: "$mainLocName|$subLocName", // Packing them into the existing locationName field
         dateTime: DateTime.now(),
       );
 
       await widget.storageService.saveStamp(stamp);
-      // Notify parent to perhaps switch tab or update library
-      widget.onPhotoTaken();
       
     } catch (e) {
       print(e);
